@@ -190,6 +190,72 @@ Notes:
 
 ====
 
+## Arbitrary precision types
+
+* Boost.Multiprecision
+* GMP - https://gmplib.org/
+* MPDEC (Python's Decimal) - https://www.bytereef.org/mpdecimal/
+
+Notes:
+
+* Arbitrary precision types have no rounding/precision issues
+* Bat are universally slow
+* We are confined by the limits of our CPU!
+
+====
+
+## Arbitrary precision types
+
+``` c
+#include <mpdecimal.h>
+
+typedef struct mpd_t {
+       uint8_t flags;       // [memory flags] | [specials] | sign
+       mpd_ssize_t exp;     // exponent
+       mpd_ssize_t digits;  // number of decimal digits
+       mpd_ssize_t len;     // number of words in use
+       mpd_ssize_t alloc;   // number of allocated words
+       mpd_uint_t *data;    // words
+} mpd_t;
+```
+
+Notes:
+
+* This is data-type used internally by MPDEC
+* One can see a variable-sized, heap allocated part.
+
+## Decimal floating point types
+
+--
+
+``` cpp
+#include <decimal/decimal>
+
+using Price = std::decimal::decimal64;
+using Quantity = std::decimal::decimal64;
+
+auto findLevel(DepthLevels& levels, const Pr& p) {
+    return std::find_if(levels.begin(), levels.end(), [&](auto& l) {
+         return l.mPrice == p;  });
+}
+
+auto accumulate(const std::vector<Trade>& trades) {
+    return std::accumulate(
+        trades.begin(), trades.end(), Qt{0},
+        []( const Qt& q, const Trade& t) {
+            return t.mQty + q;
+        }
+    );
+}
+```
+
+====
+
+## TODO decimal floating point
+https://gcc.gnu.org/onlinedocs/libstdc++/latest-doxygen/a01578.html
+
+====
+
 The last slide:
 
 * TODO: this presentation
