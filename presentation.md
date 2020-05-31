@@ -27,7 +27,7 @@ Notes:
 
 * Currently working for Kenetic, a HK-based company trading cryptocurrencies.
 * End-to-end trading system
-* Majority of the code in Python, but the fats bits in C++
+* Majority of the code in Python, but the fast bits in C++
 * This presentation is about data types used in the C++ to store financial values
 * I'm going to show excerpts from actual production code
 
@@ -40,7 +40,7 @@ Notes:
 
 * What values do we need to store?
  - price depth, trades, postions
-* On this picture: Hubi BTc/USDT, 2020-04-25 16:03
+* On this picture: Huobi BTC/USDT, 2020-04-25 16:03
 * Introducing price depth:
     - Simple price is not enough
     - At the core of every exchange as a device called 'matching engine'
@@ -48,8 +48,8 @@ Notes:
     - When new order is entered, it is matched with existing orders
     - Example - buying or selling 1 BTC
     - If there is no match, the order (possibly) joins the book
-    - If the uis a match, trade happens
-    - What we dee is 'price depth', a view of the oder book
+    - If the is a match, trade happens (rightmost panel)
+    - What we see is 'price depth', a view of the oder book
 
 https://www.binance.com/pl/trade/BTC_USDT
 https://www.huobi.com/en-us/exchange/btc_usdt/
@@ -72,9 +72,16 @@ using DepthLevels = std::vector<DepthLevel>;
 
 struct Depth {
   DepthLevels mBids; // sorted by price, descending
-  DepthLevels mAsks; // sorted by price, ascending 
+  DepthLevels mAsks; // sorted by price, ascending
 };
+
 ```
+
+Notes:
+
+This is the C++ representation of Price Depth.
+It's fairly simple.
+The only missing bit are the Price and Quantity types.
 
 ====
 
@@ -102,7 +109,7 @@ Notes:
 
 Notes:
 
-These are the options that come to mind when looking for a suitable type.
+These are the options that come to mind when looking for a suitable type
 
 ====
 
@@ -111,6 +118,10 @@ These are the options that come to mind when looking for a suitable type.
 float, double : IEEE 754
 
 <img src="img/Single-Precision-vs-Double-Precision.png"/>
+
+```
+value = mantissa * 2^exp
+```
 
 Notes:
 
@@ -135,7 +146,7 @@ Notes:
 
 ### Floating point types
 
-Cons
+Cons:
 
 * Inexact equality comparison
 * Silent loss of precision
@@ -224,35 +235,118 @@ Notes:
 * This is data-type used internally by MPDEC
 * One can see a variable-sized, heap allocated part.
 
+====
+
 ## Decimal floating point types
 
---
+* Defined by IEEE 754-2008
 
-``` cpp
+```
+value = 10^exp * mantissa
+```
+
+Notes:
+
+Decimal floating point is defined by IEEE 754-2008.
+It is more complex than the floating point, as the standard
+allows for two storage formats: binary and BCD
+
+====
+
+## Decimal floating point types
+
+Pros:
+
+* Readily available (as `std::decimal32,64,128`)
+* No rounding issues
+
+Notes:
+
+* GCC STD lib provides decimal implementation
+* There is no rounding issues, no phantom digits
+https://gcc.gnu.org/onlinedocs/libstdc++/latest-doxygen/a01578.html
+
+
+====
+
+## Decimal floating point types
+
+Cons:
+
+* Possible precision loss
+* Not supported by HW (SLOW)
+
+Notes:
+
+Precision loss is s till possible when accumulating.
+For decimal128, the mantissa is 110 bits
+There is no hardware support, everything in software
+
+====
+
+```cpp
 #include <decimal/decimal>
 
 using Price = std::decimal::decimal64;
 using Quantity = std::decimal::decimal64;
 
-auto findLevel(DepthLevels& levels, const Pr& p) {
+auto findLevel(DepthLevels& levels, const Price& p) {
     return std::find_if(levels.begin(), levels.end(), [&](auto& l) {
          return l.mPrice == p;  });
 }
 
-auto accumulate(const std::vector<Trade>& trades) {
+auto accumulateQty(const DepthLevels& levels) {
     return std::accumulate(
-        trades.begin(), trades.end(), Qt{0},
-        []( const Qt& q, const Trade& t) {
+        levels.begin(), levels.end(), Quantity{0},
+        []( const Quantity& q, const DepthLevel& l) {
             return t.mQty + q;
         }
     );
 }
 ```
 
+Notes:
+
+Simple example - accumulating traded quantity
+
 ====
 
-## TODO decimal floating point
-https://gcc.gnu.org/onlinedocs/libstdc++/latest-doxygen/a01578.html
+## Decimal floating point types
+
+```x86asm
+movdqa  xmm5, XMMWORD PTR [r14]
+movdqa  xmm0, XMMWORD PTR [r13+0]
+movdqa  xmm1, xmm5
+movaps  XMMWORD PTR [rsp], xmm5
+call    __bid_eqtd2
+test    rax, rax
+je      .L14
+add     r13, 32
+jmp     .L26
+```
+
+```x86asm
+movdqa  xmm1, XMMWORD PTR [rbx]
+add     rbx, 32
+movdqa  xmm0, XMMWORD PTR [rsp]
+call    __bid_addtd3
+cmp     rbx, rbp
+movaps  XMMWORD PTR [rsp], xmm0
+jne     .L65
+movdqa  xmm0, XMMWORD PTR [rsp]
+add     rsp, 24
+pop     rbx
+pop     rbp
+ret
+```
+
+====
+
+## Fixed point
+
+```
+value = 10^-18 * mantissa
+```
 
 ====
 
