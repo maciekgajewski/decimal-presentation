@@ -282,7 +282,7 @@ Precision loss is s till possible when accumulating.
 For decimal128, the mantissa is 110 bits
 There is no hardware support, everything in software
 
-====
+----
 
 ```cpp
 #include <decimal/decimal>
@@ -309,7 +309,7 @@ Notes:
 
 Simple example - accumulating traded quantity
 
-====
+----
 
 ## Decimal floating point types
 
@@ -342,11 +342,129 @@ ret
 
 ====
 
-## Fixed point
+## Decimal fixed point
 
 ```
-value = 10^-18 * mantissa
+value = 10^EXPONENT * mantissa
 ```
+
+Notes:
+
+* We store thew value as a simple integer, 
+* And we interpret it as a number of small quanta
+* The exponent is arbitrary and fixed
+
+
+====
+
+## How to pick an exponent
+
+* Usually exchanges offer a precision of 7-9 digits after comma
+* To store value (price * quantity), you need 18 digits
+* Exponent: 10^18
+
+Notes:
+
+Exchanges usually offer 7-9 digits of precision.
+To store a value (price*quantity)m we need 18 digits.
+
+====
+
+```cpp
+template<typename Tag>
+class Decimal {
+public:
+    static constexpr int FRAC_DIGITS = 18;
+    constexpr Decimal() = default;
+    constexpr Decimal(const Decimal &) = default;
+    constexpr Decimal(Decimal &&) = default;
+
+private:
+    constexpr explicit Decimal(storage_t v) 
+        : mValue(v) {}
+
+    storage_t mValue = 0;
+};
+
+using Price = Decimal<struct PriceTag>;
+using Quantity = Decimal<struct QuantityTag>;
+
+```
+
+Notes:
+
+This is the code that emerges.
+It uses template parameter to create string types, to provide separation.
+
+What is storage_t?
+
+====
+
+## Conversion to int, double
+
+```cpp
+
+double Decimal::toDouble() const {
+    return double(mValue) / std::pow(10, FRAC_DIGITS);
+}
+
+std::int64_t Decimal::toInt() const {
+    static_assert(FRAC_DIGITS == 18);
+    return std::int64_t(mValue / 1'000'000'000'000'000'000);
+}
+
+```
+
+====
+
+## How many bits do we need?
+
+```
+MIN_VALUE = 10^-18
+
+storage = int64 => MAX_VALUE = 2^31 * 10^-18 = 9.22337
+
+storage = int128 => MAX_VALUE = 2^127 * 10^-18 = 1.7E20
+```
+
+Notes:
+
+64 bit integer simply doesn't cut it.
+
+====
+
+```cpp
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+  using storage_t = __int128;
+#pragma GCC diagnostic pop
+
+static constexpr int INT_DIGITS = 20;
+static constexpr int FRAC_DIGITS = 18;
+static constexpr int TOTAL_DIGITS = INT_DIGITS + FRAC_DIGITS;
+```
+
+Notes:
+
+Many operations are not supported in hardware,
+but basic things, like addition, subtraction, comparison,
+compiles to raw assembly.
+
+====
+
+## Conversion from int
+
+```cpp
+static constexpr Decimal Decimal::fromInt(std::int64_t v) {
+    static_assert(FRAC_DIGITS == 18);
+    storage_t s = storage_t(v) * 1'000'000'000'000'000'000;
+    return Decimal(s);
+}
+```
+
+Notes:
+
+Conversion from integer is trivial and fast, single imul instruction.
 
 ====
 
