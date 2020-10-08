@@ -172,6 +172,35 @@ Notes:
 
 * Example form the article
 * Floating point numbers are famously bad at storing decimal fractions
+* Note on this example - there is nothing wrong with addition. The problem is 
+in the fact that neither 0.1 nor 0.2 have binary representation
+
+====
+<table>
+<tr><td>0.1<sub>2</sub></td><td> = </td><td>0.5<sub>10</sub></td></tr>
+<tr><td>0.01<sub>2</sub></td><td> = </td><td>0.25<sub>10</sub></td></tr>
+<tr><td>0.001<sub>2</sub></td><td> = </td><td>0.125<sub>10</sub></td></tr>
+<tr><td>0.0001<sub>2</sub></td><td> = </td><td>0.0625<sub>10</sub></td></tr>
+<tr><td>0.0 001<sub>2</sub></td><td> = </td><td>0.03125<sub>10</sub></td></tr>
+</table>
+
+Notes:
+
+Binary fractions can be precisely stored in decimal.
+
+====
+
+<table>
+<tr><td>0.1<sub>10</sub></td><td> = </td><td>0.0(0011)<sub>2</sub></td></tr>
+<tr><td>0.2<sub>10</sub></td><td> = </td><td>0.(0011)<sub>2</sub></td></tr>
+<tr><td>0.3<sub>10</sub></td><td> = </td><td>0.01(0011)<sub>2</sub></td></tr>
+<tr><td>0.4<sub>10</sub></td><td> = </td><td>0.0(1100)<sub>2</sub></td></tr>
+<tr><td>0.5<sub>10</sub></td><td> = </td><td>0.1<sub>2</sub></td></tr>
+</table>
+
+Notes:
+
+System dwójkowy popradzi sobie z połówką, ale z 0.7 już nie :)
 
 ====
 
@@ -357,7 +386,7 @@ Notes:
 
 ====
 
-## How to pick an exponent
+### How to pick an exponent
 
 * Usually exchanges offer a precision of 7-9 digits after comma
 * To store value (price * quantity), you need 18 digits
@@ -400,13 +429,11 @@ What is storage_t?
 
 ====
 
-## Conversion to int, double
-
 ```cpp
-
 double toDouble() const {
     return double(mValue) / std::pow(10, FRAC_DIGITS);
 }
+
 
 std::int64_t toInt() const {
     static_assert(FRAC_DIGITS == 18);
@@ -422,7 +449,7 @@ The goal of the static_assert is to attract attention to the function
 
 ====
 
-## How many bits do we need?
+### How many bits do we need?
 
 ```
 MIN_VALUE = 10^-18
@@ -463,8 +490,6 @@ compiles to raw assembly.
 
 ====
 
-## Conversion from int
-
 ```cpp
 static constexpr Decimal fromInt(std::int64_t v) {
     static_assert(FRAC_DIGITS == 18);
@@ -485,9 +510,9 @@ Conversion from integer is trivial and fast, single imul instruction.
 
 ```x86asm
 fromInt(long):
-        movabs  rax, 1000000000000000000
-        imul    rdi
-        ret
+    movabs  rax, 1000000000000000000
+    imul    rdi
+    ret
 ```
 
 Notes:
@@ -519,23 +544,156 @@ I didn't even crossed my mind to verify this.
 
 ```x86asm
 fromInt(long):
-        mov     rax, rdi
-        sar     rdi, 63
-        mov     ecx, 18
-        mov     rdx, rdi
-        mov     edi, 10
+    mov     rax, rdi
+    sar     rdi, 63
+    mov     ecx, 18
+    mov     rdx, rdi
+    mov     edi, 10
 .L6:
-        imul    rsi, rdx, 10
-        mul     rdi
-        add     rdx, rsi
-        sub     ecx, 1
-        jne     .L6
-        rep ret
+    imul    rsi, rdx, 10
+    mul     rdi
+    add     rdx, rsi
+    sub     ecx, 1
+    jne     .L6
+    rep ret
 ```
 
 Notes:
 
-But alas...
+But alas... gcc is generating bad code.
+Clang does it right, but gcc not.
+(using gcc 7.4, but even gcc 10 fails, even with -O3)
+
+====
+
+### Conversion from double
+
+```cpp
+static Decimal fromDouble(double d) {
+    storage_t s = d * 1E18; // right ???
+    return Decimal(s);
+}
+```
+
+Notes:
+
+It should be simple, right?
+Binary-to-decimal conversion is exact.
+
+====
+
+### Conversion from double
+
+``` cpp
+0.1 + 0.2 = 0.30000000000000004441
+```
+
+<img src="img/Single-Precision-vs-Double-Precision.png"/>
+
+2^52 = 4.5E+15
+
+====
+
+<table>
+<tr><th>input</th>          <th>double</th></tr>
+<tr><td>0.1 + 0.2</td>      <td>0.<u>300000000000000</u>04441</td></tr>
+<tr><td>0.07</td>           <td>0.0<u>700000000000000</u>0666</td></tr>
+<tr><td>123.456</td>        <td><u>123.456000000000</u>00307</td></tr>
+<tr><td>987654321e+10</td>  <td><u>987654320999999</u>8976</td></tr>
+</table>
+
+Notes:
+
+One can see that only 15 decimal digits of double can be trusted.
+Need to introduce a concept of 'rank'
+
+====
+
+<table>
+<tr><th>input</th>          <th>double</th> <th>rank</th></tr>
+<tr><td>0.1 + 0.2</td>      <td>0.<u>300000000000000</u>04441</td>  <td>0</td></tr>
+<tr><td>0.07</td>           <td>0.0<u>700000000000000</u>0666</td>  <td>-1</td></tr>
+<tr><td>123.456</td>        <td><u>123.456000000000</u>00307</td>   <td>3</td></tr>
+<tr><td>987654321e+10</td>  <td><u>987654320999999</u>8976</td>     <td>19</td></tr>
+</table>
+
+Notes:
+
+'Rank' is the number of significant digits before the decimal point.
+It may be negative for small fractions
+
+====
+
+```cpp
+static constexpr int TRUSTWORTHY_DIGITS_IN_DOUBLE = 15;
+
+static constexpr std::array<double, Decimal::TOTAL_DIGITS + 1>
+    DOUBLE_POWERS10{1E-18, 1E-17, ..., 1E20};
+
+static_assert(DOUBLE_POWERS10[FRAC_DIGITS] == 1.0);
+
+int findRank(double d) {
+    assert(d >= 0);
+    auto it = std::find_if(
+        DOUBLE_POWERS10.begin() + TRUSTWORTHY_DIGITS_IN_DOUBLE,
+        DOUBLE_POWERS10.end(),
+        [&](double e) { return e > d; });
+    
+    if (it == DOUBLE_POWERS10.end())
+        throw std::range_error("Double out of Decimal range");
+
+    return it - DOUBLE_POWERS10.begin() - FRAC_DIGITS;
+}
+```
+
+Notes:
+
+This code is using a lookup table to finds the rank of a double.
+
+====
+
+<img src="img/slack-logo.png" height="50"></img>
+
+```cpp
+auto it = std::find_if(
+        DOUBLE_POWERS10.begin(),
+        DOUBLE_POWERS10.end(),
+        [&](double e) { return e > d; });
+```
+vs
+```cpp
+auto it = std::upper_bound(
+    DOUBLE_POWERS10.begin(), 
+    DOUBLE_POWERS10.end(),
+    d);
+```
+
+Notes:
+
+This has been discussed on our Wro.cpp slack!
+
+====
+
+```cpp
+
+static Decimal fromDouble(double v) {
+    double d = std::abs(v);
+
+    if (d < DOUBLE_POWERS10.front())
+        return Decimal(0);
+
+    int rank = findRank(d);
+    int decimals =  
+        TRUSTWORTHY_DIGITS_IN_DOUBLE - rank;
+    d *= DOUBLE_POWERS10[FRAC_DIGITS + decimals];
+    double rounded = std::round(d);
+    storage_t s = storage_t(rounded);
+    s *= POWERS10[FRACTION_DIGITS - decimals];
+
+    if (v > 0) return s;
+    else return -s;
+}
+```
 
 ====
 
