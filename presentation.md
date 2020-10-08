@@ -404,16 +404,21 @@ What is storage_t?
 
 ```cpp
 
-double Decimal::toDouble() const {
+double toDouble() const {
     return double(mValue) / std::pow(10, FRAC_DIGITS);
 }
 
-std::int64_t Decimal::toInt() const {
+std::int64_t toInt() const {
     static_assert(FRAC_DIGITS == 18);
     return std::int64_t(mValue / 1'000'000'000'000'000'000);
 }
 
 ```
+
+Notes:
+
+The goal of the static_assert is to attract attention to the function
+(and to the constant used within) when FRAC_DIGITS changes
 
 ====
 
@@ -430,6 +435,10 @@ storage = int128 => MAX_VALUE = 2^127 * 10^-18 = 1.7E20
 Notes:
 
 64 bit integer simply doesn't cut it.
+64 bit offers only 19 decimal digits, with 18 after comma, we get only one before
+128 bits offers 38 bits (twice as much, makes sense!)
+
+QUESTION: Where are we going to get 128 integer
 
 ====
 
@@ -446,6 +455,8 @@ static constexpr int TOTAL_DIGITS = INT_DIGITS + FRAC_DIGITS;
 
 Notes:
 
+... IT turns out it is available in gcc and clang out of the box
+
 Many operations are not supported in hardware,
 but basic things, like addition, subtraction, comparison,
 compiles to raw assembly.
@@ -455,7 +466,7 @@ compiles to raw assembly.
 ## Conversion from int
 
 ```cpp
-static constexpr Decimal Decimal::fromInt(std::int64_t v) {
+static constexpr Decimal fromInt(std::int64_t v) {
     static_assert(FRAC_DIGITS == 18);
     storage_t s = storage_t(v) * 1'000'000'000'000'000'000;
     return Decimal(s);
@@ -465,6 +476,66 @@ static constexpr Decimal Decimal::fromInt(std::int64_t v) {
 Notes:
 
 Conversion from integer is trivial and fast, single imul instruction.
+(see rabbit hole if time permits)
+
+----
+
+### Conversion from int
+
+
+```x86asm
+fromInt(long):
+        movabs  rax, 1000000000000000000
+        imul    rdi
+        ret
+```
+
+Notes:
+
+The runtime version is very efficient
+
+----
+### Conversion from int
+
+```cpp
+static constexpr Decimal fromInt(std::int64_t v) {
+    storage_t s(v);
+    for (int i = 0; i < FRAC_DIGITS; i++) {
+      s *= 10;
+    }
+    return Decimal(s);
+}
+```
+
+Notes:
+
+I assumed that, since the function is constexpr, the generated
+code will be super-efficient.
+I didn't even crossed my mind to verify this.
+
+----
+### Conversion from int
+
+
+```x86asm
+fromInt(long):
+        mov     rax, rdi
+        sar     rdi, 63
+        mov     ecx, 18
+        mov     rdx, rdi
+        mov     edi, 10
+.L6:
+        imul    rsi, rdx, 10
+        mul     rdi
+        add     rdx, rsi
+        sub     ecx, 1
+        jne     .L6
+        rep ret
+```
+
+Notes:
+
+But alas...
 
 ====
 
