@@ -165,12 +165,12 @@ Notes:
 Bad at storing decimal numbers
 
 ``` cpp
-0.1 + 0.2 = 0.30000000000000004
+0.1 + 0.2 = 0.30000000000000004441
 ```
 
 Notes:
 
-* Example form the article
+* Example form the article (expanded to 20 decimal palces)
 * Floating point numbers are famously bad at storing decimal fractions
 * Note on this example - there is nothing wrong with addition. The problem is 
 in the fact that neither 0.1 nor 0.2 have binary representation
@@ -181,7 +181,7 @@ in the fact that neither 0.1 nor 0.2 have binary representation
 <tr><td>0.01<sub>2</sub></td><td> = </td><td>0.25<sub>10</sub></td></tr>
 <tr><td>0.001<sub>2</sub></td><td> = </td><td>0.125<sub>10</sub></td></tr>
 <tr><td>0.0001<sub>2</sub></td><td> = </td><td>0.0625<sub>10</sub></td></tr>
-<tr><td>0.0 001<sub>2</sub></td><td> = </td><td>0.03125<sub>10</sub></td></tr>
+<tr><td>0.00001<sub>2</sub></td><td> = </td><td>0.03125<sub>10</sub></td></tr>
 </table>
 
 Notes:
@@ -374,7 +374,7 @@ ret
 ## Decimal fixed point
 
 ```
-value = 10^EXPONENT * mantissa
+value = 10^-EXPONENT * mantissa
 ```
 
 Notes:
@@ -388,13 +388,13 @@ Notes:
 
 ### How to pick an exponent
 
-* Usually exchanges offer a precision of 7-9 digits after comma
+* Usually exchanges offer a precision of 6-9 digits after comma
 * To store value (price * quantity), you need 18 digits
 * Exponent: 10^18
 
 Notes:
 
-Exchanges usually offer 7-9 digits of precision.
+Exchanges usually offer 6-9 digits of precision.
 To store a value (price*quantity)m we need 18 digits.
 
 ====
@@ -430,12 +430,12 @@ What is storage_t?
 ====
 
 ```cpp
-double toDouble() const {
+constexpr double toDouble() const {
     return double(mValue) / std::pow(10, FRAC_DIGITS);
 }
 
 
-std::int64_t toInt() const {
+constexpr std::int64_t toInt() const {
     static_assert(FRAC_DIGITS == 18);
     return std::int64_t(mValue / 1'000'000'000'000'000'000);
 }
@@ -454,9 +454,9 @@ The goal of the static_assert is to attract attention to the function
 ```
 MIN_VALUE = 10^-18
 
-storage = int64 => MAX_VALUE = 2^31 * 10^-18 = 9.22337
+storage_t = int64 => MAX_VALUE = 2^63 * 10^-18 = 9.22337
 
-storage = int128 => MAX_VALUE = 2^127 * 10^-18 = 1.7E20
+storage_t = int128 => MAX_VALUE = 2^127 * 10^-18 = 1.7E20
 ```
 
 Notes:
@@ -520,9 +520,9 @@ Notes:
 The runtime version is very efficient
 
 ----
-### Conversion from int
 
 ```cpp
+// earlier version
 static constexpr Decimal fromInt(std::int64_t v) {
     storage_t s(v);
     for (int i = 0; i < FRAC_DIGITS; i++) {
@@ -539,7 +539,6 @@ code will be super-efficient.
 I didn't even crossed my mind to verify this.
 
 ----
-### Conversion from int
 
 
 ```x86asm
@@ -566,8 +565,6 @@ Clang does it right, but gcc not.
 
 ====
 
-### Conversion from double
-
 ```cpp
 static Decimal fromDouble(double d) {
     storage_t s = d * 1E18; // right ???
@@ -582,11 +579,8 @@ Binary-to-decimal conversion is exact.
 
 ====
 
-### Conversion from double
 
-``` cpp
 0.1 + 0.2 = 0.30000000000000004441
-```
 
 <img src="img/Single-Precision-vs-Double-Precision.png"/>
 
@@ -650,21 +644,21 @@ Notes:
 
 This code is using a lookup table to finds the rank of a double.
 
-====
+----
 
 <img src="img/slack-logo.png" height="50"></img>
 
 ```cpp
 auto it = std::find_if(
-        DOUBLE_POWERS10.begin(),
-        DOUBLE_POWERS10.end(),
+        p.begin(),
+        p.end(),
         [&](double e) { return e > d; });
 ```
 vs
 ```cpp
 auto it = std::upper_bound(
-    DOUBLE_POWERS10.begin(), 
-    DOUBLE_POWERS10.end(),
+    p.begin(), 
+    p.end(),
     d);
 ```
 
@@ -686,12 +680,12 @@ static Decimal fromDouble(double v) {
     int decimals =  
         TRUSTWORTHY_DIGITS_IN_DOUBLE - rank;
     d *= DOUBLE_POWERS10[FRAC_DIGITS + decimals];
-    double rounded = std::round(d);
-    storage_t s = storage_t(rounded);
+    
+    storage_t s = storage_t(std::round(d));
     s *= POWERS10[FRACTION_DIGITS - decimals];
 
-    if (v > 0) return s;
-    else return -s;
+    if (v > 0) return Decimal(s);
+    else return Decimal(-s);
 }
 ```
 
