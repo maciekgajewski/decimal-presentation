@@ -50,9 +50,16 @@ Notes:
     - If there is no match, the order (possibly) joins the book
     - If the is a match, trade happens (rightmost panel)
     - What we see is 'price depth', a view of the oder book
+* Old picture
 
 https://www.binance.com/pl/trade/BTC_USDT
 https://www.huobi.com/en-us/exchange/btc_usdt/
+https://www.bitmex.com/app/trade/XBTUSD
+
+----
+
+<!-- .slide: data-background-image="img/bitmex-btc-usd_2021-03-29_10-51-43.png" -->
+<!-- .slide:data-background-size="contain" -->
 
 
 ====
