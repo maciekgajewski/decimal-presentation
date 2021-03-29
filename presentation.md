@@ -51,7 +51,6 @@ Notes:
     - If the is a match, trade happens (rightmost panel)
     - What we see is 'price depth', a view of the oder book
 * Old picture
-
 https://www.binance.com/pl/trade/BTC_USDT
 https://www.huobi.com/en-us/exchange/btc_usdt/
 https://www.bitmex.com/app/trade/XBTUSD
@@ -104,6 +103,7 @@ Notes:
 
 * The type must be fast. If don;t need speed, we use Python
 * Depth diffs and multi-depth operations require operators to be fast!
+* 2^63 -> 10^19
 
 ====
 
@@ -201,8 +201,8 @@ Binary fractions can be precisely stored in decimal.
 <tr><td>0.1<sub>10</sub></td><td> = </td><td>0.0(0011)<sub>2</sub></td></tr>
 <tr><td>0.2<sub>10</sub></td><td> = </td><td>0.(0011)<sub>2</sub></td></tr>
 <tr><td>0.3<sub>10</sub></td><td> = </td><td>0.01(0011)<sub>2</sub></td></tr>
-<tr><td>0.4<sub>10</sub></td><td> = </td><td>0.0(1100)<sub>2</sub></td></tr>
 <tr><td>0.5<sub>10</sub></td><td> = </td><td>0.1<sub>2</sub></td></tr>
+<tr><td>0.7<sub>10</sub></td><td> = </td><td>0.1(0110)<sub>2</sub></td></tr>
 </table>
 
 Notes:
@@ -489,13 +489,52 @@ static constexpr int TOTAL_DIGITS = INT_DIGITS + FRAC_DIGITS;
 
 Notes:
 
-... IT turns out it is available in gcc and clang out of the box
+... It turns out it is available in gcc and clang out of the box
 
 Many operations are not supported in hardware,
 but basic things, like addition, subtraction, comparison,
 compiles to raw assembly.
 
 ====
+
+### Basic arithmetic
+
+```cpp
+Decimal accumulate(
+    const Decimal* begin, 
+    const Decimal* end) {
+
+    return std::accumulate(begin, end, Decimal{});
+}
+```
+
+====
+
+### Basic arithmetic
+
+```x86asm
+Decimal accumulate(
+    const Decimal* begin, 
+    const Decimal* end) {
+        xor     eax, eax
+        xor     edx, edx
+        cmp     rdi, rsi
+        je      .L12
+.L11:
+        add     rax, QWORD PTR [rdi]
+        adc     rdx, QWORD PTR 8[rdi]
+        add     rdi, 16
+        cmp     rsi, rdi
+        jne     .L11
+        rep ret
+.L12:
+        rep ret
+    }
+```
+
+====
+
+### Conversion from int
 
 ```cpp
 static constexpr Decimal fromInt(std::int64_t v) {
