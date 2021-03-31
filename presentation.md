@@ -323,58 +323,51 @@ There is no hardware support, everything in software
 ```cpp
 #include <decimal/decimal>
 
-using Price = std::decimal::decimal64;
-using Quantity = std::decimal::decimal64;
+using Decimal = std::decimal::decimal64;
 
-auto findLevel(DepthLevels& levels, const Price& p) {
-    return std::find_if(levels.begin(), levels.end(), [&](auto& l) {
-         return l.mPrice == p;  });
-}
+Decimal accumulate(
+    const Decimal* begin, 
+    const Decimal* end) {
 
-auto accumulateQty(const DepthLevels& levels) {
-    return std::accumulate(
-        levels.begin(), levels.end(), Quantity{0},
-        []( const Quantity& q, const DepthLevel& l) {
-            return t.mQty + q;
-        }
-    );
+    return std::accumulate(begin, end, Decimal(0));
 }
 ```
 
 Notes:
 
-Simple example - accumulating traded quantity
+Simple example - accumulating decimals
 
 ----
 
 ## Decimal floating point types
 
 ```x86asm
-movdqa  xmm5, XMMWORD PTR [r14]
-movdqa  xmm0, XMMWORD PTR [r13+0]
-movdqa  xmm1, xmm5
-movaps  XMMWORD PTR [rsp], xmm5
-call    __bid_eqtd2
-test    rax, rax
-je      .L14
-add     r13, 32
-jmp     .L26
+        movabs  rax, 3584865303386914816
+        cmp     rdi, rsi
+        je      .L7
+        push    rbp
+        mov     rbp, rsi
+        push    rbx
+        mov     rbx, rdi
+        sub     rsp, 8
+.L3:    movq    xmm1, QWORD PTR [rbx]
+        movq    xmm0, rax
+        add     rbx, 8
+        call    __bid_adddd3
+        movq    rax, xmm0
+        cmp     rbp, rbx
+        jne     .L3
+        add     rsp, 8
+        pop     rbx
+        pop     rbp
+        ret
+.L7:    movq    xmm0, rax
+        ret
 ```
 
-```x86asm
-movdqa  xmm1, XMMWORD PTR [rbx]
-add     rbx, 32
-movdqa  xmm0, XMMWORD PTR [rsp]
-call    __bid_addtd3
-cmp     rbx, rbp
-movaps  XMMWORD PTR [rsp], xmm0
-jne     .L65
-movdqa  xmm0, XMMWORD PTR [rsp]
-add     rsp, 24
-pop     rbx
-pop     rbp
-ret
-```
+Notes:
+
+gcc-10
 
 ====
 
@@ -739,6 +732,6 @@ static Decimal fromDouble(double v) {
 
 The last slide:
 
-* TODO: this presentation
+* https://github.com/maciekgajewski/decimal-presentation
 * maciej.gajewski0@gmail.com
 * https://floating-point-gui.de/
