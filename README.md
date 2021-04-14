@@ -1,6 +1,9 @@
 # decimal-presentation
 Presentation: "fast fixed-point type"
 
+# View online:
+https://maciekgajewski.github.io/decimal-presentation/
+
 
 # Abstacr (PL)
 
